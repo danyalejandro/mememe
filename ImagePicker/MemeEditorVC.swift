@@ -86,7 +86,7 @@ class MemeEditorVC: UIViewController, UINavigationControllerDelegate, UIImagePic
 
 	func keyboardWillHide(notification: NSNotification) {
 		if (viewIsShifted) {
-			view.frame.origin.y += getKeyboardHeight(notification)
+			view.frame.origin.y = 0
 			viewIsShifted = false
 		}
 	}
