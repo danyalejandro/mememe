@@ -1,15 +1,20 @@
 //
-//  ViewController.swift
+//  MemeEditorVC.swift
 //  ImagePicker
 //
-//  Created by Dany Cabrera Vargas on 27/07/15.
+//  Created by Dany Cabrera Vargas on 28/07/15.
 //  Copyright (c) 2015 Dany Alejandro Cabrera Vargas. All rights reserved.
 //
 
 import UIKit
 
-// View controller for the 
-class ViewController: UIViewController, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+// View controller for the Meme Editor
+class MemeEditorVC: UIViewController, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+	var delTxtTop = TextFieldDelegate(defText: "TOP")
+	var delTxtBottom = TextFieldDelegate(defText: "BOTTOM")
+	var viewIsShifted = false
+	var createdMeme: Meme!
+	var loadWithIndex: Int? = nil // if not nil then load this meme
 
 	@IBOutlet weak var img: UIImageView!
 	@IBOutlet weak var btPhoto: UIBarButtonItem!
@@ -19,15 +24,12 @@ class ViewController: UIViewController, UINavigationControllerDelegate, UIImageP
 	@IBOutlet weak var btnShare: UIBarButtonItem!
 	@IBOutlet weak var navBar: UINavigationBar!
 
-	var delTxtTop = TextFieldDelegate()
-	var viewIsShifted = false
-	var createdMeme: Meme!
 
 	override func viewDidLoad() {
 		super.viewDidLoad()
 		btPhoto.enabled = UIImagePickerController.isSourceTypeAvailable(UIImagePickerControllerSourceType.Camera)
 		txtTop.delegate = delTxtTop
-		txtBottom.delegate = delTxtTop
+		txtBottom.delegate = delTxtBottom
 		btnShare.enabled = false
 
 		// Apply special text format to textFields
@@ -47,10 +49,21 @@ class ViewController: UIViewController, UINavigationControllerDelegate, UIImageP
 
 	override func viewWillAppear(animated: Bool) {
 		super.viewWillAppear(animated)
-		txtTop.text = "TOP"
-		txtBottom.text = "BOTTOM"
-		self.subscribeToKeyboardNotifications()
+		if (loadWithIndex != nil) {
+			loadMeme(loadWithIndex)
+			loadWithIndex = nil
+		}
+		else {
+			txtTop.text = "TOP"
+			txtBottom.text = "BOTTOM"
+		}
+		subscribeToKeyboardNotifications()
 
+	}
+
+	override func viewWillDisappear(animated: Bool) {
+		super.viewWillDisappear(animated)
+		unsubscribeFromKeyboardNotifications()
 	}
 
 	func subscribeToKeyboardNotifications() {
@@ -66,13 +79,14 @@ class ViewController: UIViewController, UINavigationControllerDelegate, UIImageP
 	func keyboardWillShow(notification: NSNotification) {
 		if (txtBottom.isFirstResponder()) {
 			let height = getKeyboardHeight(notification)
-			self.view.frame.origin.y -= height
+			view.frame.origin.y -= height
 			viewIsShifted = true
 		}
 	}
+
 	func keyboardWillHide(notification: NSNotification) {
 		if (viewIsShifted) {
-			self.view.frame.origin.y += getKeyboardHeight(notification)
+			view.frame.origin.y += getKeyboardHeight(notification)
 			viewIsShifted = false
 		}
 	}
@@ -83,51 +97,67 @@ class ViewController: UIViewController, UINavigationControllerDelegate, UIImageP
 		return keyboardSize.CGRectValue().height
 	}
 
-	override func viewWillDisappear(animated: Bool) {
-		super.viewWillDisappear(animated)
-		self.unsubscribeFromKeyboardNotifications()
-	}
-
-	@IBAction func pickImage(sender: UIBarButtonItem) {
-		var ivc = UIImagePickerController()
-		ivc.delegate = self
-		presentViewController(ivc, animated: true, completion: nil)
-	}
-
 	func imagePickerController(picker: UIImagePickerController, didFinishPickingImage image: UIImage!, editingInfo: [NSObject : AnyObject]!) {
 		img.image = image
 		btnShare.enabled = true
-		self.dismissViewControllerAnimated(true, completion: nil)
+		dismissViewControllerAnimated(true, completion: nil)
 	}
 
 	func imagePickerControllerDidCancel(picker: UIImagePickerController) {
-		self.dismissViewControllerAnimated(true, completion: nil)
+		dismissViewControllerAnimated(true, completion: nil)
 	}
 
+	// Creates and returns the Meme Image
 	func generateMemedImage() -> UIImage {
 		navBar.hidden = true
 		toolbar.hidden = true
 
 		// Render view to an image
 		UIGraphicsBeginImageContext(self.view.frame.size)
-		self.view.drawViewHierarchyInRect(self.view.frame, afterScreenUpdates: true)
+		view.drawViewHierarchyInRect(self.view.frame, afterScreenUpdates: true)
 		let memedImage : UIImage = UIGraphicsGetImageFromCurrentImageContext()
 		UIGraphicsEndImageContext()
 
-		// show elements
 		navBar.hidden = false
 		toolbar.hidden = false
-
 		return memedImage
 	}
-	func createMeme() -> Meme {
-		return Meme(
+
+	// Stores the current meme as an object in the appDelegate memes array
+	func storeMeme(imgMeme: UIImage!) {
+		let object = UIApplication.sharedApplication().delegate
+		let appDelegate = object as! AppDelegate
+
+		let createdMeme = Meme(
 			textTop: txtTop.text!,
 			textBottom: txtBottom.text!,
 			image: img.image,
-			memedImage: generateMemedImage())
+			memedImage: imgMeme
+		)
+
+		appDelegate.memes.append(createdMeme)
 	}
 
+	// Loads the meme at given index
+	func loadMeme(index: Int!) {
+		let object = UIApplication.sharedApplication().delegate
+		let appDelegate = object as! AppDelegate
+
+		let loadedMeme = appDelegate.memes[index]
+		txtTop.text = loadedMeme.textTop
+		txtBottom.text = loadedMeme.textBottom
+		img.image = loadedMeme.image
+		btnShare.enabled = true
+	}
+
+	// Album button -> Show image picker
+	@IBAction func pickImage(sender: UIBarButtonItem) {
+		var ivc = UIImagePickerController()
+		ivc.delegate = self
+		presentViewController(ivc, animated: true, completion: nil)
+	}
+
+	// Picture button -> obtain image from camera
 	@IBAction func takePicture(sender: UIBarButtonItem) {
 		var ivc = UIImagePickerController()
 		ivc.delegate = self
@@ -135,28 +165,28 @@ class ViewController: UIViewController, UINavigationControllerDelegate, UIImageP
 		presentViewController(ivc, animated: true, completion: nil)
 	}
 
+	// Share Button -> Show Activity View
 	@IBAction func shareMeme(sender: UIBarButtonItem) {
-		createdMeme = createMeme()
-		var avc = UIActivityViewController(activityItems: [createdMeme.memedImage], applicationActivities: nil)
+		let imgMeme = generateMemedImage()
+
+		var avc = UIActivityViewController(activityItems: [imgMeme], applicationActivities: nil)
 		avc.completionWithItemsHandler = {activity, success, items, error in
+			// Handle "Cancel" button
 			if !success {
 				return
 			}
 
-			self.registerMeme()
+			// If activity was a success, store the meme and return to Sent Memes
+			self.storeMeme(imgMeme)
 			self.dismissViewControllerAnimated(true, completion: nil)
 		}
+
 		presentViewController(avc, animated: true, completion: nil)
 	}
 
-	func registerMeme() {
-		let object = UIApplication.sharedApplication().delegate
-		let appDelegate = object as! AppDelegate
-		appDelegate.memes.append(createdMeme)
-	}
+	// Cancel button -> dismiss view
 	@IBAction func dismissView(sender: UIBarButtonItem) {
 		dismissViewControllerAnimated(true, completion: nil)
 	}
-
 }
 
